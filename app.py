@@ -102,7 +102,7 @@ async def on_message(message):
     if message.content.startswith('#'):
             await User_Level(message,'Add Exp')
             if message.content.startswith('#lets-go'):
-                await message.channel.send('DABABY')               
+                await message.channel.send('Hello')               
 
             elif message.content.startswith('#help'):
                 await message.channel.send(help_text)

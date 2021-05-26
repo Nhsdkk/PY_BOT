@@ -1,4 +1,4 @@
-help_text = '#lets-go - command for sending \'DABABY\'\n#help - command for helping note (commands)\n#Level - command, which shows you your level \n#r/ + \'subreddit\' + \'-\' + \'section (hot,new,etc.)\' - command for getting 25 reddit posts from the subreddit you requested'
+help_text = '#lets-go - command for sending \'Hello\'\n#Level - command, which shows you your level \n#r/ + \'subreddit\' + \'-\' + \'section (hot,new,etc.)\' - command for getting 25 reddit posts from the subreddit you requested'
 Error_text = 'Unknown command. Type \'#help\' for all bot commands.'
 Synt = 'Hot - hot subreddit posts\nNew - new subreddit posts\nBest - best subreddit posts\nTop - top subreddit posts\nRising - rising subreddit posts'
 ee='Q09OR1JBVFMhIFlvdSBmb3VuZCB0aGUgZWFzdGVyIGVnZywgYnV0IGF0IHdoYXQgY29zdC4gQW55d2F5IHRoaXMgaXMgRWFzdGVyIEVnZyA6IFRoZSBkZXZlbG9wZXIgcXVpdGVkIGxlYWd1ZSB0aGUgc2FtZSBkYXkgaGUgc3RhcnRlZCB0aGlzIHByb2plY3Q= (BASE 64 System)'
