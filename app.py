@@ -1,46 +1,154 @@
-from asyncio.windows_events import SelectorEventLoop
-from typing import List
+from asyncio import tasks
 import discord
 import requests
 import configparser
-#import argparse
+from discord.ext import tasks
 
-config = configparser.ConfigParser()
-config.read('private_data.ini')
-Reddit_client_id = config['Reddit']['rci']
-Reddit_secret_token = config['Reddit']['rst']
-username = config['Reddit']['user']
-password = config['Reddit']['psw']
-DisToken = config['Discord']['token']
-
-client = discord.Client()
 
 from Text import help_text
 from Text import Error_text
 from Text import ee
 from Text import Synt
+from Text import settinglist
+
+config1 = configparser.ConfigParser()
+config1.read('private_data.ini')
+with open ('private_data.ini','r') as config_file1:
+    Reddit_client_id = config1['Reddit']['rci']
+    Reddit_secret_token = config1['Reddit']['rst']
+    username = config1['Reddit']['user']
+    password = config1['Reddit']['psw']
+    DisToken = config1['Discord']['token']
+config_file1.close()
+
+client = discord.Client()
 
 @client.event
 async def on_ready():
-    print('ready for {0.user}'.format(client))
-#    is_ = False
+    print('{0.user} is ready. Thank you for using this bot!'.format(client))
+    config = configparser.ConfigParser()
+    config.read('User_data.ini')
+
+
+async def AddSetting(setting,chname,rep,usrname,message):
+    if setting == 'gitchannel':
+        param = 'channel'
+        variable = chname
+        section = 'github'
+    elif setting == 'gitrep':
+        param = 'rep'
+        variable = rep
+        section = 'github'
+    elif setting == 'gitusername':
+        param = 'username'
+        variable = usrname
+        section = 'github'
+    else:
+        await message.channel.send('The command spelling is incorrect. Use #settinglist to see all settings')
+        return
+    
+    config = configparser.ConfigParser()
+    config.read('User_data.ini')
+    try:
+        section_name = config[section]        
+    except Exception: # KeyError:
+        config.add_section(section)
+
+    config.set(section,param,variable)
+    with open ('User_data.ini','w') as config_file:
+        config.write(config_file)
+    config_file.close()
+
+    await message.channel.send('Setting applied.')
+
+
+def Get_Channel_Id(channel_name):
+    chn_list = list(client.get_all_channels())
+    for e in chn_list:
+        if e.name == channel_name:
+            channelid = e.id
+            break
+    return (channelid)
+
+
+async def Get_Update(message):
+    err_msg = {
+        'channel':'No message channel assigned.',
+        'rep': 'No repository assigned.',
+        'username':'No username assigned.',
+    }
+    msg_use = 'Use #settings + \'=\' + setting (Use #settinglist to see all settings) + \'=\' + parameter to add/edit setting.'
+
+    config = configparser.ConfigParser()
+
+    config.read('User_data.ini')
+    try:
+        channelname = config['github']['channel']
+    except Exception:
+        await message.channel.send(err_msg['channel']+' '+msg_use)
+        return
+    try:
+        repname = config['github']['rep']
+    except Exception:
+        await message.channel.send(err_msg['rep']+' '+msg_use)
+        return
+
+    try:
+        usrname = config['github']['username']
+    except Exception:
+        await message.channel.send(err_msg['username']+' '+msg_use)
+        return
+    if channelname == '':
+        await message.channel.send(err_msg['channel']+' '+msg_use)
+        return
+    elif repname == '':
+        await message.channel.send(err_msg['rep']+' '+msg_use)
+        return
+    elif usrname == '':
+        await message.channel.send(err_msg['username']+' '+msg_use)
+        return
+    channel = client.get_channel(Get_Channel_Id(channelname))
+
+    try:
+        lastsha = config['Last_Sha']['Sha']
+    except KeyError:
+        config.add_section('Last_Sha')
+        config.set('Last_Sha','Sha','')    
+    
+    except Exception:
+        config.set('Last_Sha','Sha','')
+    lastsha = config['Last_Sha']['Sha']
+    
+    url = 'https://api.github.com/repos/'+ usrname+'/'+ repname + '/events'
+    res = requests.get(url).json()
+
+    sha = res[0]['payload']['commits'][0]['sha']
+    if lastsha != sha:
+        config.set('Last_Sha','Sha',sha)
+        lastsha = sha
+        await channel.send (usrname+'updated his program. Watch whats new now: '+'https://github.com/'+ usrname + '/' + repname + '/commit/' + sha)
+
+    with open ('User_data.ini','w') as config_file:
+        config.write(config_file)
+    config_file.close()
 
 def Reddit_Subreddit_Section(message):
-    index1 = 3
+    index1=3
     Bol1=True
-    Reddit_Subreddit = ''
-    Section = ''
+    Reddit_Subreddit=''
+    Section=''
     while (not(index1 == len(message.content))and(Bol1)):
         if message.content[index1] == '-':
             Bol1=False
             index1+=1
             break
         else:
-            Reddit_Subreddit += message.content[index1]
-            index1 += 1
+            Reddit_Subreddit+=message.content[index1]
+            index1+=1
     
     for index2 in range (index1,len(message.content)):
-        Section += message.content[index2]
+        Section+=message.content[index2]
+
     return(str(Section),str(Reddit_Subreddit))
 
 async def reddit_API_usage(subreddit,section,message):
@@ -70,7 +178,7 @@ async def User_Level(message,function):
         Expstr = config[Username]['UserExp']
         Expint = int(Expstr)
 
-    except:
+    except Exception:
         config.add_section(Username)
         config.set(Username,'UserExp','0')
         with open('User_data.ini', "w") as config_file:
@@ -93,14 +201,22 @@ async def User_Level(message,function):
         with open ('User_data.ini','w') as config_file:
             config.write(config_file)
 
+@tasks.loop(seconds = 300)
+async def GetGitUpdates(message):
+    try:
+        await Get_Update(message)
+    except Exception as e:
+        await message.channel.send('Error: '+ str(e)) 
 
 @client.event
 async def on_message(message):
     if message.author == client.user:
-        return      
+        return          
 
     if message.content.startswith('#'):
+
             await User_Level(message,'Add Exp')
+
             if message.content.startswith('#lets-go'):
                 await message.channel.send('Hello')               
 
@@ -115,15 +231,42 @@ async def on_message(message):
 
                 try:
                     await reddit_API_usage(str(Subreddit),str(Section),message)
-                except:
-                    await message.channel.send('An error ocurred. Check the spelling of subreddit or section. Type #Synt to see all reddit sections')
+                except Exception:
+                   await message.channel.send('An error ocurred. Check the spelling of subreddit or section. Type #synt to see all reddit sections')
 
-            elif message.content.startswith('#Synt'):
+            elif message.content.startswith('#settinglist'):
+                await message.channel.send(settinglist)
+
+            elif message.content.startswith('#synt'):
                 await message.channel.send(Synt)
             
-            elif message.content.startswith('#Level'):
+            elif message.content.startswith('#level'):
                 await User_Level(message,'GetLevel')
 
+            elif message.content.startswith('#gitupdates'):
+                command = message.content.split('=')
+                if command[1] == 'start':    
+                    await GetGitUpdates.start(message)
+                elif command[1] == 'stop':
+                    GetGitUpdates.stop
+                    #print('stop ')
+
+            elif message.content.startswith('#settings'):
+                channelname = message.content.split('=')
+                text = client.get_all_channels()
+                Channelexists = False
+                if channelname[1] == 'gitchannel':
+                    for i in text:
+                         if i.name == channelname[2]:
+                             Channelexists = True
+                             break
+                    if Channelexists:
+                        await AddSetting(channelname[1],channelname[2],channelname[2],channelname[2],message)    
+                    else:
+                        await message.channel.send ('No channel named '+channelname[2])
+                else:
+                    await AddSetting(channelname[1],channelname[2],channelname[2],channelname[2],message)                     
+                 
             else:
                 await message.channel.send(Error_text)
 

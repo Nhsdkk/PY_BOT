@@ -2,3 +2,4 @@ help_text = '#lets-go - command for sending \'Hello\'\n#Level - command, which s
 Error_text = 'Unknown command. Type \'#help\' for all bot commands.'
 Synt = 'Hot - hot subreddit posts\nNew - new subreddit posts\nBest - best subreddit posts\nTop - top subreddit posts\nRising - rising subreddit posts'
 ee='Q09OR1JBVFMhIFlvdSBmb3VuZCB0aGUgZWFzdGVyIGVnZywgYnV0IGF0IHdoYXQgY29zdC4gQW55d2F5IHRoaXMgaXMgRWFzdGVyIEVnZyA6IFRoZSBkZXZlbG9wZXIgcXVpdGVkIGxlYWd1ZSB0aGUgc2FtZSBkYXkgaGUgc3RhcnRlZCB0aGlzIHByb2plY3Q= (BASE 64 System)'
+settinglist = 'gitchannel - channel where gits will be send\ngitrep - repository you are tracking\ngitusername - username of the owner of the repository you are tracking'
