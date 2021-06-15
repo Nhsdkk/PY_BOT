@@ -7,7 +7,7 @@ ee='Q09OR1JBVFMhIFlvdSBmb3VuZCB0aGUgZWFzdGVyIGVnZywgYnV0IGF0IHdoYXQgY29zdC4gQW55
 
 dic_help = {
     '#lets-go':'command for sending \'Hello\'',
-    '#Level':'command, which shows you your level',
+    '#level':'command, which shows you your level',
     '#r/ + \'subreddit\' + \'=\' + \'section (hot,new,etc.)\'':'command for getting 25 reddit posts from the subreddit you requested',
     '#gitupdates=start':'starts sending github repository updates to a channel',
     '#gitupdates=stop':'stops sending github repository updates to a channel',
@@ -15,12 +15,15 @@ dic_help = {
     '#addbm':'sends the message you replied to in pm',
     '#removebm':'deletes bot\'s message, that replied to in private message',
     '#curtrack':'sends an information about a track that you are listening to at this moment',
-    '#wakeup+\'person mention\' +\'channel mention\'': 'sends a wake up message to the person you mentioned'    
+    '#wakeup+\'person mention\' +\'channel mention\'': 'sends a wake up message to the person you mentioned',
+    '#lyrics' : 'sends a lyrics of currently playing song(on Spotify)',
+    '#fact' : 'sends a random number fact'
 } 
 
 htextemb = discord.Embed(title = 'Bot commands',color = color)
 for k,v in dic_help.items():
     htextemb.add_field(name = k,value = v,inline=False)
+htextemb.set_thumbnail(url = 'https://www.shareicon.net/data/512x512/2015/09/15/641268_windows_512x512.png')
 
 settingsemb = discord.Embed(title = 'Settings',color = color)
 settingsemb.add_field(name = 'gitchannel',value = 'channel where gits will be send',inline=False)

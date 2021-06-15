@@ -3,10 +3,15 @@ import discord
 from discord import activity
 from discord.activity import Spotify
 import requests
-import configparser
 from discord.ext import tasks
 import datetime
 import re
+import random
+import sys
+import os
+import json
+import lyricsgenius
+from lyricsgenius import Genius
 
 from Text import htextemb
 from Text import Error_text
@@ -14,16 +19,54 @@ from Text import ee
 from Text import Syntemb
 from Text import settingsemb
 
-config1 = configparser.ConfigParser()
-config1.read('private_data.ini')
-with open ('private_data.ini','r') as config_file1:
-    Reddit_client_id = config1['Reddit']['rci']
-    Reddit_secret_token = config1['Reddit']['rst']
-    username = config1['Reddit']['user']
-    password = config1['Reddit']['psw']
-    DisToken = config1['Discord']['token']
-config_file1.close()
+if not(os.path.exists('private_data.json')):
+    print('An error ocurred. private_data.json does not exist. Please read the installation instructions and use startup.py before using bot.')
+    sys.exit()
+with open ('private_data.json','r') as private:
+    data = json.load(private)
+
+Reddit_client_id = data['Reddit']['rci']
+Reddit_secret_token = data['Reddit']['rst']
+username = data['Reddit']['user']
+password = data['Reddit']['psw']
+DisToken = data['Distoken']
+try:
+    gentoken = data['GeniusToken']
+except:
+    print('An error ocurred. There is no Genius API token. Please read the installation instructions and use startup.py before using bot.')
+    sys.exit()
+
+if not(os.path.exists('settings.json')):
+    print('An error ocurred. settings.json file does not exists. Use startup.py to create this file')
+    sys.exit()
+with open ('settings.json') as settingf:
+    data = json.load(settingf)
+
+chnstartid = data['channel_start_message']
+if chnstartid == '':
+    print('An error ocurred. System channel is not assigned. Use startup.py to assign a channel by id')
+    sys.exit()    
+chngitname = data['github']['channel']
+repname = data['github']['repository']
+usrname = data['github']['username']
+
+if not(os.path.exists('data.json')):
+    print('An error ocurred. data.json file does not exists. Use startup.py to create this file')
+    sys.exit()
+
+with open ('data.json','r') as datfile:
+    data = json.load(datfile)
+
+lastsha = data['lastsha']
+
 color = 0x874aff
+
+Beginer = [0,1,2,3,4]
+Intermed = [5,6,7,8,9]
+Senior = [10,11,12,13,14]
+Pro = [15,16,17,18,19]
+Genius = [20,21,22,23,24]
+Sheesh = 25
 
 today = datetime.date.today()
 tyear = today.year
@@ -32,43 +75,75 @@ if tyear != 2021:
     year = '(flashback from 2021)'
 intents = discord.Intents.all()
 activity = discord.Activity(name = f'a new episode of \'Yes or no\'{year}',type =discord.ActivityType.watching)
+roles = []
 
 client = discord.Client(intents=intents,activity=activity)
 
 @client.event
 async def on_ready():
-    print('{0.user} is ready. Thank you for using this bot!'.format(client))
-    config = configparser.ConfigParser()
-    config.read('User_data.ini') 
+    global chnstartid
+    chnid = chnstartid
+    for channel in client.get_all_channels():
+        if channel.id == int(chnid):
+            chn = channel
+            break
 
-async def AddSetting(setting,chname,rep,usrname,message):
+    msg = await chn.send('msg')
+    await RoleChecker(msg)
+    await msg.delete()
+    print (f'{client.user.name} is now working')
+
+async def rndfact(message):
+    global color
+    res = requests.get('http://numbersapi.com/random/math?json')
+    msg = discord.Embed(title = 'Random number fact',color = color)
+    text = res.json()['text']
+    words = text.split(' ')
+    i = True
+
+    fact = ''
+    for word in words:
+        if i:
+            i = False
+            pass 
+        else:
+            fact= fact+' '+word
+    msg.add_field(name = words[0],value = fact,inline = False)
+    await message.channel.send(embed = msg)
+
+def Admcheck(message):
+    return (message.author.guild_permissions.administrator)
+
+def Genusage(name,artist):
+    global gentoken
+    genius = lyricsgenius.Genius(gentoken,skip_non_songs=True, excluded_terms=["(Remix)", "(Live)"], remove_section_headers=True)
+    song = genius.search_song(name,artist)
+    return(song.lyrics)
+
+async def AddSetting(setting,variable,message):
+    if not(Admcheck(message)):
+        await message.channel.send ('Not  permissions to use this command. User should be administrator.')
+        return
+    with open ('settings.json','r') as stgfile:
+        data = json.load(stgfile)
+    
     if setting == 'gitchannel':
         param = 'channel'
-        variable = chname
         section = 'github'
     elif setting == 'gitrep':
-        param = 'rep'
-        variable = rep
+        param = 'repository'
         section = 'github'
     elif setting == 'gitusername':
         param = 'username'
-        variable = usrname
         section = 'github'
     else:
         await message.channel.send('The command spelling is incorrect. Use #settinglist to see all settings')
         return
     
-    config = configparser.ConfigParser()
-    config.read('User_data.ini')
-    try:
-        section_name = config[section]        
-    except Exception: # KeyError:
-        config.add_section(section)
+    data[section][param] = variable
 
-    config.set(section,param,variable)
-    with open ('User_data.ini','w') as config_file:
-        config.write(config_file)
-    config_file.close()
+    with open ('settings.json','w') as stgfile:
+        json.dump(data,stgfile)
 
     await message.channel.send('Setting applied.')
 
@@ -98,25 +173,8 @@ async def Get_Update(message):
     }
     msg_use = 'Use #settings + \'=\' + setting (Use #settinglist to see all settings) + \'=\' + parameter to add/edit setting.'
 
-    config = configparser.ConfigParser()
-
-    config.read('User_data.ini')
-    try:
-        channelname = config['github']['channel']
-    except Exception:
-        await message.channel.send(err_msg['channel']+' '+msg_use)
-        return
-    try:
-        repname = config['github']['rep']
-    except Exception:
-        await message.channel.send(err_msg['rep']+' '+msg_use)
-        return
-
-    try:
-        usrname = config['github']['username']
-    except Exception:
-        await message.channel.send(err_msg['username']+' '+msg_use)
-        return
+    global chngitname, repname,usrname
+    channelname = chngitname
     if channelname == '':
         await message.channel.send(err_msg['channel']+' '+msg_use)
         return
@@ -125,18 +183,11 @@ async def Get_Update(message):
         return
     elif usrname == '':
         await message.channel.send(err_msg['username']+' '+msg_use)
-        return
+        return            
+
     channel = client.get_channel(Get_Channel_Id(channelname))
 
-    try:
-        lastsha = config['Last_Sha']['Sha']
-    except KeyError:
-        config.add_section('Last_Sha')
-        config.set('Last_Sha','Sha','')    
-    
-    except Exception:
-        config.set('Last_Sha','Sha','')
-    lastsha = config['Last_Sha']['Sha']
+    global lastsha
     
     url = 'https://api.github.com/repos/'+ usrname+'/'+ repname + '/events'
     res = requests.get(url).json()
@@ -145,17 +196,17 @@ async def Get_Update(message):
 
     sha = res[0]['payload']['commits'][0]['sha']
     if lastsha != sha:
-        config.set('Last_Sha','Sha',sha)
+        with open('data.json','r') as datfile:
+            data = json.load(datfile)
+        data['lastsha'] = sha
+        with open ('data.json','w') as datfile:
+            json.dump(data,datfile)
         lastsha = sha
         await channel.send(message.guild.default_role)
         embmsg =discord.Embed(title = 'Repository update!',color = color)
         embmsg.add_field(name = f'{repname} repository was updated',value = f'{usrname} updated his program.',inline=False)
         embmsg.add_field(name = 'URL',value = 'https://github.com/'+ usrname + '/' + repname + '/commit/' + sha,inline=False)
         await channel.send (embed=embmsg)
-
-    with open ('User_data.ini','w') as config_file:
-        config.write(config_file)
-    config_file.close()
 
 async def reddit_API_usage(subreddit,section,message):
     global color
@@ -172,7 +223,6 @@ async def reddit_API_usage(subreddit,section,message):
     res = requests.get('https://oauth.reddit.com/r/' + subreddit + '/'+ section ,headers=headers,params = {'limit' : 25})
     for post in res.json()['data']['children']:
         title = post['data']['title']
-        print(title)
         embmsg = discord.Embed(title = title,color = color)
         permalink = post['data']['permalink']
         embmsg.add_field(name = 'Link:',value = f'https://reddit.com{permalink}',inline = False)
@@ -187,12 +237,28 @@ def GetChannelType(message):
     chantype=list(message.channel.type)
     return(chantype[0])
 
-# async def GetRole(message,roleid):
-#     role = discord.guild.Guild.get_role(message.guild,role_id=int(roleid))
-#     print(role)
-#     await message.channel.send(role.color)
+def GetRNDColor():
+    rndcolor = [0,0,0]
+    rndcolor[0]=random.randint(0,255)
+    rndcolor[1]=random.randint(0,255)
+    rndcolor[2]=random.randint(0,255)
+    return (rndcolor)
 
-# async def GetMessage(messageid,message):
+async def RoleChecker(message):
+    rolenames = ['Beginner','Intermediate','Senior','Pro','Genius','Sheeesh']
+    cluserid = client.user.id
+    cluser = discord.utils.get(client.get_all_members(),id = cluserid)
+    global roles
+    for rolename in rolenames:
+        role=discord.utils.get(cluser.roles,name = rolename)
+        if not (role in cluser.roles):
+            rndcolormass = GetRNDColor()
+            rndcolor = discord.Color.from_rgb(rndcolormass[0],rndcolormass[1],rndcolormass[2])
+            role = await message.guild.create_role(name = rolename,color = rndcolor,hoist = False,mentionable = False)
+            await cluser.add_roles(role,reason = '')       
+        roles.append(role)
+
+# asymessage.guildsage(messageid,message):
 #     message_data = await message.channel.fetch_message(messageid)
 #     await message.channel.send(message_data.reactions)
 
@@ -256,70 +322,118 @@ async def DeletePM(message):
     else:
         await message.channel.send ('Not enough permissions.')
 
-async def GetCurrentTrack(message):
+async def GetCurrentTrack(message,function):
     activitylist = message.author.activities
     global color
     for activity in activitylist:
         if isinstance(activity,Spotify):
-            embedmessage = discord.Embed(title='Spotify',color = color)
-            embedmessage.set_thumbnail(url = activity.album_cover_url)
-            embedmessage.add_field(name = f'{message.author.name}\'s currently plaing track:',value = f'{activity.title} by {activity.artist}',inline=False)
-            embedmessage.add_field(name = 'URL',value = f'https://open.spotify.com/track/{activity.track_id}')
-            await message.channel.send(embed = embedmessage)            
+            if function == 'track':
+                embedmessage = discord.Embed(title='Spotify',color = color)
+                embedmessage.set_thumbnail(url = activity.album_cover_url)
+                embedmessage.add_field(name = f'{message.author.name}\'s currently plaing track:',value = f'{activity.title} by {activity.artist}',inline=False)
+                embedmessage.add_field(name = 'URL',value = f'https://open.spotify.com/track/{activity.track_id}')
+            elif function == 'lyrics':
+                artist = activity.artist.split('; ')
+                lyrics = Genusage(activity.title,artist[0])
+                stroki = lyrics.split('\n')
+                i=0
+                lengh = 0
+                parags = []
+                for z in range(len(stroki)):
+                    parags.append('')
+                for stroka in stroki:
+                    if lengh+len(stroka) <= 1024:
+                        parags[i] = parags[i]+'\n'+stroka
+                        lengh = lengh + len(stroka)+1
+                    else:
+                        lengh=len(stroka)
+                        i+=1
+                        parags[i]= parags[i]+stroka
 
-async def User_Level(message,function):
-    config = configparser.ConfigParser()
-    config.read('User_data.ini') 
+                a = 1                    
+                embedmessage = discord.Embed(title='Spotify',color = color)
+                embedmessage.set_thumbnail(url = activity.album_cover_url)
+                embedmessage.add_field(name = 'Song:',value = f'{activity.title} by {activity.artist}',inline = False)
+                for parag in range(i+1):
+                    embedmessage.add_field(name = f'Lyrics(part {a}): ',value = parags[parag],inline = False)
+                    a+=1
+            await message.channel.send(embed = embedmessage)
+
+async def levelrole (message,role,rolelist):
+    for usrrole in message.author.roles:
+        for roll in rolelist:
+            if roll != role:
+                if usrrole == roll:
+                    await message.author.remove_roles(roll)
+    await message.author.add_roles(role)    
+
+async def User_Level(message,function): 
 
     Username = str(message.author)
 
-    k=3
-    global color
+    k=2
+    global color,Beginer,Intermed,Senior,Pro,Genius,Sheesh,roles
+
+
+    with open('data.json','r') as datfile:
+        data = json.load(datfile) 
 
     try:
-        Expstr = config[Username]['UserExp']
-        Expint = int(Expstr)
-
-    except Exception:
-        config.add_section(Username)
-        config.set(Username,'UserExp','0')
-        with open('User_data.ini', "w") as config_file:
-            config.write(config_file)
-        Expstr = config[Username]['UserExp']
-        Expint = int(Expstr)
-
+        Expstr = data[Username]['UserExp']
+    except:
+        Expint = 0
+        User_Level = 0
+        data[Username] = {}
+        data[Username]['UserExp'] = '0'
+        data[Username]['UserLevel'] = '0'
+        await message.author.add_roles(roles[0])
+    Expint = int(Expstr)
     User_Level = 0
-    LevelExp = 1
+    LevelExp = 75
 
     try:
-        User_Level = config[username]['userlevel']
+        User_Level = int(data[Username]['UserLevel'])
+        while Expint > LevelExp:
+            LevelExp = round(LevelExp + LevelExp * 1.5)
     except:
         while Expint > LevelExp:
-            LevelExp = LevelExp + LevelExp * 2
+            LevelExp = round(LevelExp + LevelExp * 1.5)
             User_Level += 1
-        config.set(Username,'userlevel',str(User_Level))    
+        data[Username]['UserLevel'] = str(User_Level)   
     
     oldlevel = User_Level
 
     if function == 'GetLevel':
         embmsg = discord.Embed(title = 'Level',color =color)
         embmsg.add_field(name=message.author,value = str(User_Level),inline = False)
-        embmsg.add_field(name = 'EXP until next level:',value = str(LevelExp-Expint)+' exp',inline = False)
-        await message.channel.send(embed = embmsg) 
+        embmsg.add_field(name = 'EXP until next level:',value = str(round(LevelExp-Expint))+' exp',inline = False)
+        await message.channel.send(embed = embmsg)
 
     elif function == 'Add Exp':
+        data[Username]['UserExp'] = int(Expint)
         Expint = Expint + k * len(message.content)
-        config.set(Username,'UserExp',str(Expint))
         while Expint > LevelExp:
-            LevelExp = LevelExp + LevelExp * 2
+            LevelExp = LevelExp + LevelExp * 1.5
             User_Level += 1
         if oldlevel != User_Level:
+            data[Username]['UserLevel'] = str(User_Level)
             embmsg = discord.Embed(title = 'New level!', color = color)
             embmsg.add_field(name = f'{Username} leveled up',value = f'The user is now level {User_Level}. Congatulations!',inline=False)
-            await message.channel.send(embed=embmsg) 
-        with open ('User_data.ini','w') as config_file:
-            config.write(config_file)
-        config_file.close()
+            await message.channel.send(embed=embmsg)
+        with open ('data.json','w') as datfile:
+            json.dump(data,datfile)
+        if User_Level in Beginer:
+            await levelrole(message,roles[0],roles)
+        elif User_Level in Intermed:
+            await levelrole(message,roles[1],roles)
+        elif User_Level in Senior:
+            await levelrole(message,roles[2],roles)
+        elif User_Level in Pro:
+            await levelrole(message,roles[3],roles)
+        elif User_Level in Genius:
+            await levelrole(message,roles[4],roles)
+        elif User_Level >= Sheesh:
+            await levelrole(message,roles[5],roles)
 
 @tasks.loop(seconds = 300)
 async def GetGitUpdates(message):
@@ -333,79 +447,97 @@ async def on_message(message):
     if message.author == client.user:
         return          
 
-    if message.content.startswith('#'):
+    if message.content.startswith('#lets-go'):
+        await message.channel.send('Hello')               
+        await User_Level(message,'Add Exp')
 
-            await User_Level(message,'Add Exp')
+    elif message.content.startswith('#help'):
+        await message.channel.send(embed = htextemb)
+        await User_Level(message,'Add Exp')
 
-            if message.content.startswith('#lets-go'):
-                await message.channel.send('Hello')               
+    elif message.content.startswith('#LOGIN-SHEESH-PASSWORD-FAKER'):
+        await message.channel.send(ee)
+        await User_Level(message,'Add Exp')
 
-            elif message.content.startswith('#help'):
-                await message.channel.send(embed = htextemb)
+    elif message.content.startswith('#r/'):               
+        data1=message.content.split('/')
+        data2 = data1[1].split('=')
+        Section = data2[1]
+        Subreddit=data2[0]
+        try:
+            await reddit_API_usage(str(Subreddit),str(Section),message)
+        except Exception:
+            await message.channel.send('An error ocurred. Check the spelling of subreddit or section. Type #synt to see all reddit sections')
+        await User_Level(message,'Add Exp')
 
-            elif message.content.startswith('#LOGIN-SHEESH-PASSWORD-FAKER'):
-                await message.channel.send(ee)
+    elif message.content.startswith('#settinglist'):
+        await message.channel.send(embed = settingsemb)
+        await User_Level(message,'Add Exp')
 
-            elif message.content.startswith('#r/'):               
-                data1=message.content.split('/')
-                data2 = data1[1].split('=')
-                Section = data2[1]
-                Subreddit=data2[0]
-                try:
-                    await reddit_API_usage(str(Subreddit),str(Section),message)
-                except Exception:
-                    await message.channel.send('An error ocurred. Check the spelling of subreddit or section. Type #synt to see all reddit sections')
+    elif message.content.startswith('#synt'):
+        await message.channel.send(embed = Syntemb)
+        await User_Level(message,'Add Exp')
 
-            elif message.content.startswith('#settinglist'):
-                await message.channel.send(embed = settingsemb)
+    elif message.content.startswith('#level'):
+        await User_Level(message,'GetLevel')
+        await User_Level(message,'Add Exp')
 
-            elif message.content.startswith('#synt'):
-                await message.channel.send(embed = Syntemb)
-            
-            elif message.content.startswith('#level'):
-                await User_Level(message,'GetLevel')
+    elif message.content.startswith('#gitupdates'):
+        if not(Admcheck(message)):
+            await message.channel.send ('Not  permissions to use this command. User should be administrator.')
+            return
+        command = message.content.split('=')
+        if command[1] == 'start':    
+            await GetGitUpdates.start(message)
+        elif command[1] == 'stop':
+            GetGitUpdates.stop
+        await User_Level(message,'Add Exp')
 
-            elif message.content.startswith('#gitupdates'):
-                command = message.content.split('=')
-                if command[1] == 'start':    
-                    await GetGitUpdates.start(message)
-                elif command[1] == 'stop':
-                    GetGitUpdates.stop
-
-            elif message.content.startswith('#settings'):
-                channelname = message.content.split('=')
-                text = client.get_all_channels()
-                Channelexists = False
-                if channelname[1] == 'gitchannel':
-                    for i in text:
-                         if i.name == channelname[2]:
-                             Channelexists = True
-                             break
-                    if Channelexists:
-                        await AddSetting(channelname[1],channelname[2],channelname[2],channelname[2],message)    
-                    else:
-                        await message.channel.send ('No channel named '+channelname[2])
-                else:
-                    await AddSetting(channelname[1],channelname[2],channelname[2],channelname[2],message)
-            elif message.content.startswith('#wakeup'):
-                await WakeUp(message)
-            #    await GetMentions(message)
-            #    await GetAllUsers(message)
-            #     content = message.content.split('=')
-            #     roleid = content[1]
-            #     #await GetRole(message,roleid)
-            #     await GetMessage(roleid,message) 
-            
-            elif message.content.startswith('#addbm'):
-                await GetReferenceToPM(message)
-
-            elif message.content.startswith('#currenttrack'):
-                await GetCurrentTrack(message)
-
-            elif message.content.startswith('#removebm'):
-                await DeletePM(message)
-                 
+    elif message.content.startswith('#settings'):
+        channelname = message.content.split('=')
+        text = client.get_all_channels()
+        Channelexists = False
+        if channelname[1] == 'gitchannel':
+            for i in text:
+                    if i.name == channelname[2]:
+                        Channelexists = True
+                        break
+            if Channelexists:
+                await AddSetting(channelname[1],channelname[2],message)    
             else:
-                await message.channel.send(Error_text)
+                await message.channel.send ('No channel named '+channelname[2])
+        else:
+            await AddSetting(channelname[1],channelname[2],message)
+        await User_Level(message,'Add Exp')
+
+    elif message.content.startswith('#wakeup'):
+        await WakeUp(message)
+        await User_Level(message,'Add Exp') 
+    
+    elif message.content.startswith('#addbm'):
+        await GetReferenceToPM(message)
+        await User_Level(message,'Add Exp')
+
+    elif message.content.startswith('#curtrack'):
+        await GetCurrentTrack(message,'track')
+        await User_Level(message,'Add Exp')
+
+    elif message.content.startswith('#removebm'):
+        await DeletePM(message)
+        await User_Level(message,'Add Exp')
+
+    elif message.content.startswith('#lyrics'):
+        try:
+            await GetCurrentTrack(message,'lyrics')
+            await User_Level(message,'Add Exp')
+        except:
+            await message.channel.send('An error ocurred. There is no lyrics on Genius for this song.')
+
+    elif message.content.startswith('#fact'):
+        await rndfact(message)
+        await User_Level(message,'Add Exp')
+        
+    else:
+        await message.channel.send(Error_text)
 
 client.run(DisToken)
